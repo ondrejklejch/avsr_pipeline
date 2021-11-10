@@ -101,7 +101,7 @@ class Video:
             vOut.write(frame)
         vOut.release()
 
-        command = ("ffmpeg -y -i %s -i %s -strict -2 %s" % (tmp_wav, tmp_avi, path))
+        command = ("ffmpeg -v 8 -y -i %s -i %s -strict -2 %s" % (tmp_wav, tmp_avi, path))
         output = subprocess.call(command, shell=True, stdout=None)
 
 
