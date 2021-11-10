@@ -1,3 +1,4 @@
+import os
 import cv2
 import glob
 import numpy as np
@@ -104,6 +105,9 @@ class Video:
         command = ("ffmpeg -v 8 -y -i %s -i %s -strict -2 %s" % (tmp_wav, tmp_avi, path))
         output = subprocess.call(command, shell=True, stdout=None)
 
+        os.remove(tmp_wav)
+        os.remove(tmp_avi)
+
 
 def load_video(path):
     video = load_frames(path)
@@ -128,5 +132,9 @@ def load_frames(path):
 
 
 def load_audio(path):
-    path = path.replace('videos/', 'audio/').replace('.mp4', '.wav')
-    return wavfile.read(path)
+    command = ("ffmpeg -v 8 -y -i %s -vn -acodec pcm_s16le -ar 16000 -ac 1 %s" % (path, path + ".wav"))
+    output = subprocess.call(command, shell=True, stdout=None)
+    sample_rate, audio = wavfile.read(path + ".wav")
+    os.remove(path + ".wav")
+
+    return sample_rate, audio
