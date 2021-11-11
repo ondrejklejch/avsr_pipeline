@@ -15,6 +15,7 @@ Options:
   --scene-threshold FLOAT        Threshold for histogram based shot detection.  [default: 0.004]
   --min-scene-duration INTEGER   Minimum scene duration in frames.  [default: 25]
   --min-face-size INTEGER        Minimum mean face size in pixels.  [default: 50]
+  --detect-face-every-nth-frame INTEGER  Detect faces every nth frames.  [default: 1]
   --syncnet-threshold FLOAT      SyncNet threshold.  [default: 2.5]
   --min-speech-duration INTEGER  Minimum speech segment duration.  [default: 20]
   --max-pause-duration INTEGER   Maximum pause duration between speech

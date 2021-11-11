@@ -13,8 +13,8 @@ def load_face_detector(device):
     return S3FD(device)
 
 
-def find_facetracks(face_detector, video, min_face_size=50):
-    frame_bboxes = list(detect_faces_in_frames(face_detector, video.frames))
+def find_facetracks(face_detector, video, min_face_size=50, every_nth_frame=1):
+    frame_bboxes = list(detect_faces_in_frames(face_detector, video.frames, every_nth_frame=every_nth_frame))
     for face_track in extract_face_tracks(frame_bboxes):
         if is_too_small(face_track, min_face_size):
             continue
@@ -25,7 +25,9 @@ def find_facetracks(face_detector, video, min_face_size=50):
         yield video.trim(start_frame, end_frame).crop(interpolate_track(face_track))
 
 
-def detect_faces_in_frames(face_detector, images, conf_th=0.9, scales=[0.25], batch_size=256):
+def detect_faces_in_frames(face_detector, images, every_nth_frame=1, conf_th=0.9, scales=[0.25], batch_size=256):
+    images = images[::every_nth_frame]
+
     with torch.no_grad():
         num_images = len(images)
         bboxes = [[] for _ in range(num_images)]
@@ -56,7 +58,7 @@ def detect_faces_in_frames(face_detector, images, conf_th=0.9, scales=[0.25], ba
 
             image_bboxes = np.vstack(image_bboxes)
             keep = nms_(image_bboxes, 0.1)
-            yield (image_id, [tuple(bbox) for bbox in image_bboxes[keep]])
+            yield (image_id * every_nth_frame, [tuple(bbox) for bbox in image_bboxes[keep]])
 
 
 def preprocess_image(image, scale):
