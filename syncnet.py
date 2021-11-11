@@ -29,37 +29,19 @@ def find_talking_segments(syncnet, facetrack, threshold, min_speech_duration, ma
     with torch.no_grad():
         fconf, fconfm = get_syncnet_scores(syncnet, facetrack)
         segments = get_syncnet_segments(fconfm, threshold, min_speech_duration, max_pause_duration)
-        
+
         for start, end in segments:
             yield facetrack.trim(start, end)
 
 
 def get_syncnet_scores(syncnet, facetrack):
-    frames = np.stack(facetrack.frames, axis=3)
-    frames = np.expand_dims(frames, axis=0)
-    frames = np.transpose(frames, (0,3,4,1,2))
-    
-    mfcc = zip(*python_speech_features.mfcc(facetrack.audio, facetrack.audio_sample_rate))
-    mfcc = np.stack([np.array(i) for i in mfcc])
-    mfcc = np.expand_dims(np.expand_dims(mfcc, axis=0),axis=0)
-    
-    frames_length = frames.shape[2]
-    audio_length = mfcc.shape[-1] // 4
-    length = min(frames_length, audio_length) - 5
-    
-    batch_size = 20
+    dataset = VideoIterableDataset(facetrack, batch_size=20)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=None, shuffle=False, pin_memory=True)
+
     visual_feats = []
     audio_feats = []
-    
-    for start in range(0, length, batch_size):
-        end = min(start + batch_size, length)
-        
-        frames_batch = [frames[:,:,vframe:vframe+5,:,:] for vframe in range(start, end)]
-        frames_batch = torch.cat([torch.from_numpy(f.astype(float)).float() for f in frames_batch], 0)
+    for frames_batch, mfcc_batch in dataloader:
         visual_feats.append(syncnet.model.forward_lip(frames_batch.cuda(syncnet.device)).cpu())
-
-        mfcc_batch = [mfcc[:,:,:,vframe*4:vframe*4+20] for vframe in range(start, end)]
-        mfcc_batch = torch.cat([torch.from_numpy(f.astype(float)).float() for f in mfcc_batch], 0)
         audio_feats.append(syncnet.model.forward_aud(mfcc_batch.cuda(syncnet.device)).cpu())
 
     visual_feats = torch.cat(visual_feats, axis=0)
@@ -77,7 +59,7 @@ def get_syncnet_scores(syncnet, facetrack):
 def get_syncnet_segments(fconfm, threshold, min_speech_duration, max_pause_duration):
     inside = False
     start = None
-    segments = []   
+    segments = []
     for i, is_synchronised in enumerate(list(fconfm > threshold) + [True, True, True, True, True, False]):
         if inside:
             if not is_synchronised:
@@ -86,13 +68,13 @@ def get_syncnet_segments(fconfm, threshold, min_speech_duration, max_pause_durat
                         segments.append((start, i))
                     else:
                         segments[-1] = (segments[-1][0], i)
-                    
+
                 start = None
                 inside = False
         elif is_synchronised:
             start = i
             inside = True
-            
+
     return segments
 
 
@@ -103,3 +85,33 @@ def calc_pdist(feat1, feat2, vshift=15):
     for i in range(0,len(feat1)):
         dists.append(torch.nn.functional.pairwise_distance(feat1[[i],:].repeat(win_size, 1), feat2p[i:i+win_size,:]))
     return dists
+
+
+class VideoIterableDataset(torch.utils.data.IterableDataset):
+
+  def __init__(self, video, batch_size):
+    super(VideoIterableDataset).__init__()
+
+    self.video = video
+    self.batch_size = batch_size
+
+  def __iter__(self):
+    mfcc = zip(*python_speech_features.mfcc(self.video.audio, self.video.audio_sample_rate))
+    mfcc = np.stack([np.array(i) for i in mfcc])
+    mfcc = np.expand_dims(np.expand_dims(mfcc, axis=0),axis=0)
+
+    frames_length = len(self.video.frames)
+    audio_length = mfcc.shape[-1] // 4
+    length = min(frames_length, audio_length) - 5
+
+    for start in range(0, length, self.batch_size):
+        end = min(start + self.batch_size, length)
+
+        frames = np.stack(self.video.frames[start:end+5], axis=3)
+        frames = np.expand_dims(frames, axis=0)
+        frames = np.transpose(frames, (0,3,4,1,2))
+
+        frames_batch = np.vstack([frames[:,:,vframe:vframe+5,:,:] for vframe in range(end - start)]).astype('float32')
+        mfcc_batch = np.vstack([mfcc[:,:,:,vframe*4:vframe*4+20] for vframe in range(start, end)]).astype('float32')
+
+        yield frames_batch, mfcc_batch
