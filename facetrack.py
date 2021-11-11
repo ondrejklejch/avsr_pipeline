@@ -4,14 +4,17 @@ warnings.filterwarnings("ignore", category=UserWarning)
 import cv2
 import numpy as np
 from scipy.interpolate import interp1d
+
+import torch
 from syncnet_python.detectors import S3FD
+from syncnet_python.detectors.s3fd.box_utils import nms_
 
 def load_face_detector(device):
     return S3FD(device)
 
 
 def find_facetracks(face_detector, video, min_face_size=50):
-    frame_bboxes = detect_faces_in_frames(face_detector, video.frames)
+    frame_bboxes = list(detect_faces_in_frames(face_detector, video.frames))
     for face_track in extract_face_tracks(frame_bboxes):
         if is_too_small(face_track, min_face_size):
             continue
@@ -22,15 +25,46 @@ def find_facetracks(face_detector, video, min_face_size=50):
         yield video.trim(start_frame, end_frame).crop(interpolate_track(face_track))
 
 
-def detect_faces_in_frames(face_detector, frames):
-    face_detection_scales = [0.25]
-    frame_bboxes = []
+def detect_faces_in_frames(face_detector, images, conf_th=0.9, scales=[0.25], batch_size=256):
+    with torch.no_grad():
+        num_images = len(images)
+        bboxes = [[] for _ in range(num_images)]
+        w, h = images[0].shape[1], images[0].shape[0]
 
-    for frame_id, frame in enumerate(frames):
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame_bboxes.append((frame_id, [tuple(face) for face in face_detector.detect_faces(frame, conf_th=0.9, scales=face_detection_scales)]))
+        for s in scales:
+            for batch_offset in range(0, num_images, batch_size):
+                batch_images = images[batch_offset:batch_offset + batch_size]
+                preprocessed_images = [preprocess_image(image, s) for image in batch_images]
+                x = torch.stack([torch.from_numpy(img).to(face_detector.device) for img in preprocessed_images], axis=0)
+                y = face_detector.net(x)
 
-    return frame_bboxes
+                for image_id, detections in enumerate(y.data, batch_offset):
+                    scale = torch.Tensor([w, h, w, h])
+
+                    for i in range(detections.size(0)):
+                        for j, score in enumerate(detections[i, :, 0]):
+                            if score <= conf_th:
+                                break
+
+                            pt = (detections[i, j, 1:] * scale).cpu().numpy()
+                            bbox = (pt[0], pt[1], pt[2], pt[3], score)
+                            bboxes[image_id].append(bbox)
+
+        for image_id, image_bboxes in enumerate(bboxes):
+            if len(image_bboxes) == 0:
+                continue
+
+            image_bboxes = np.vstack(image_bboxes)
+            keep = nms_(image_bboxes, 0.1)
+            yield (image_id, [tuple(bbox) for bbox in image_bboxes[keep]])
+
+
+def preprocess_image(image, scale):
+    mean = np.array([123., 117., 104.])[:, np.newaxis, np.newaxis].astype('float32')
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = cv2.resize(image, dsize=(0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
+    return np.transpose(image, [2, 0, 1]).astype('float32') - mean
+
 
 def bb_intersection_over_union(bboxA, bboxB):
     xA1, yA1, xA2, yA2, _ = bboxA
