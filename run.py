@@ -5,7 +5,7 @@ from scene import segment_scenes
 from facetrack import load_face_detector, find_facetracks
 from syncnet import load_syncnet, find_talking_segments
 
-@click.command()
+@click.command(context_settings=dict(show_default=True))
 @click.option('--device', default='cuda:0', help='CUDA device.')
 @click.option('--scene-threshold', default=0.004, help='Threshold for histogram based shot detection.')
 @click.option('--min-scene-duration', default=25, help='Minimum scene duration in frames.')
@@ -14,7 +14,8 @@ from syncnet import load_syncnet, find_talking_segments
 @click.option('--min-speech-duration', default=20, help='Minimum speech segment duration.')
 @click.option('--max-pause-duration', default=10, help='Maximum pause duration between speech segments.')
 @click.argument('pattern')
-def main(device, scene_threshold, min_scene_duration, min_face_size, syncnet_threshold, min_speech_duration, max_pause_duration, pattern):
+@click.argument('output_dir')
+def main(device, scene_threshold, min_scene_duration, min_face_size, syncnet_threshold, min_speech_duration, max_pause_duration, pattern, output_dir):
     face_detector = load_face_detector(device)
     syncnet = load_syncnet(device)
 
@@ -24,12 +25,15 @@ def main(device, scene_threshold, min_scene_duration, min_face_size, syncnet_thr
 
         video = load_video(path)
         scenes = segment_scenes(video, scene_threshold, min_scene_duration)
-        for i, scene in enumerate(scenes):
+        for scene in scenes:
             facetracks = find_facetracks(face_detector, scene, min_face_size)
-            for j, facetrack in enumerate(facetracks):
+            for facetrack in facetracks:
                 segments = find_talking_segments(syncnet, facetrack, syncnet_threshold, min_speech_duration, max_pause_duration)
-                for k, segment in enumerate(segments):
-                    segment.write('output/%s-scene_%d-facetrack_%d-segment_%d.mp4' % (name, i, j, k))
+                for segment in segments:
+                    start = segment.frame_offset / 25.
+                    end = start + len(segment.frames) / 25.
+
+                    segment.write('%s/%s-segment-%.2f-%.2f.mp4' % (output_dir, name, start, end))
 
 
 if __name__ == '__main__':
