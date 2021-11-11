@@ -97,7 +97,8 @@ class Video:
         wavfile.write(tmp_wav, self.audio_sample_rate, self.audio)
 
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        vOut = cv2.VideoWriter(tmp_avi, fourcc, 25, self.frames[0].shape[:2])
+        shape = (self.frames[0].shape[1], self.frames[0].shape[0])
+        vOut = cv2.VideoWriter(tmp_avi, fourcc, 25, shape)
         for frame in self.frames:
             vOut.write(frame)
         vOut.release()
