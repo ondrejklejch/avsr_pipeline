@@ -16,14 +16,23 @@ class Video:
         self.frame_offset = frame_offset
         self.parent = parent
 
-    def trim(self, start_frame, end_frame):
-        return Video(
-            self.frames[start_frame:end_frame],
-            self.audio[start_frame * 640:end_frame * 640],
-            self.audio_sample_rate,
-            self.frame_offset + start_frame,
-            self
-        )
+    def trim(self, start_frame, end_frame, offset=0):
+        if start_frame >= offset:
+            return Video(
+                self.frames[start_frame:end_frame],
+                self.audio[(start_frame - offset) * 640:(end_frame - offset) * 640],
+                self.audio_sample_rate,
+                self.frame_offset + start_frame,
+                self
+            )
+        else:
+            return Video(
+                self.frames[(start_frame + offset):(end_frame + offset)],
+                self.audio[start_frame * 640:end_frame * 640],
+                self.audio_sample_rate,
+                self.frame_offset + start_frame,
+                self
+            )
 
     def crop(self, track, crop_padding_factor=0.4):
         xs = []
