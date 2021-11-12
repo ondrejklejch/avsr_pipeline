@@ -25,16 +25,18 @@ def load_syncnet(device):
     return SyncNet(model, device)
 
 
-def find_talking_segments(syncnet, facetrack, threshold, min_speech_duration, max_pause_duration):
+def find_talking_segments(syncnet, facetrack, threshold, min_speech_duration, max_pause_duration, vshift=15):
     with torch.no_grad():
-        fconf, fconfm = get_syncnet_scores(syncnet, facetrack)
+        fconfm, visual_feats, audio_feats = get_syncnet_scores(syncnet, facetrack, vshift)
         segments = get_syncnet_segments(fconfm, threshold, min_speech_duration, max_pause_duration)
 
         for start, end in segments:
-            yield facetrack.trim(start, end)
+            confidence, offset = compute_confidence_and_offset(visual_feats[start:end], audio_feats[start:end], vshift)
+            if confidence >= threshold:
+                yield facetrack.trim(start, end), confidence, offset
 
 
-def get_syncnet_scores(syncnet, facetrack):
+def get_syncnet_scores(syncnet, facetrack, vshift):
     dataset = VideoIterableDataset(facetrack, batch_size=20)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=None, shuffle=False, pin_memory=True)
 
@@ -46,14 +48,14 @@ def get_syncnet_scores(syncnet, facetrack):
 
     visual_feats = torch.cat(visual_feats, axis=0)
     audio_feats = torch.cat(audio_feats, axis=0)
-    dists = calc_pdist(visual_feats, audio_feats, vshift=15)
+    dists = calc_pdist(visual_feats, audio_feats, vshift)
     mdist = torch.mean(torch.stack(dists, 1), 1)
     minval, minidx = torch.min(mdist, 0)
     fdist = np.stack([dist[minidx].numpy() for dist in dists])
     fconf = torch.median(mdist).numpy() - fdist
     fconfm = medfilt(fconf, kernel_size=25)
 
-    return fconf, fconfm
+    return fconfm, visual_feats, audio_feats
 
 
 def get_syncnet_segments(fconfm, threshold, min_speech_duration, max_pause_duration):
@@ -76,6 +78,17 @@ def get_syncnet_segments(fconfm, threshold, min_speech_duration, max_pause_durat
             inside = True
 
     return segments
+
+
+def compute_confidence_and_offset(visual_feats, audio_feats, vshift):
+    dists = torch.stack(calc_pdist(visual_feats, audio_feats, vshift)).cpu().numpy()
+    mdist = np.mean(dists, 0)
+    minval = np.min(mdist)
+    minidx = np.argmin(mdist)
+    confidence = np.median(mdist) - minval
+    offset = vshift - minidx
+
+    return confidence, offset
 
 
 def calc_pdist(feat1, feat2, vshift=15):
