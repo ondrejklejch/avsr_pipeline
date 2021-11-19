@@ -34,7 +34,7 @@ def main(device, scene_threshold, min_scene_duration, min_face_size, detect_face
                     start = segment.frame_offset / 25.
                     end = start + len(segment.frames) / 25.
 
-                    segment.write('%s/%s-segment-%.2f-%.2f.mp4' % (output_dir, name, start, end))
+                    segment.write('%s/%s-%.2f-%.2f.mp4' % (output_dir, name, start, end))
 
 
 if __name__ == '__main__':

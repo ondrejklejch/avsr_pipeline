@@ -60,8 +60,8 @@ class Video:
             )
 
             face = padded_frame[
-                int(x + padding - size):int(x + size + 3 * padding), # 2 * size + 2 * padding
-                int(y - size):int(y + size + 2 * padding)            # 2 * size + 2 * padding
+                max(0, int(x + padding - size)):int(x + size + 3 * padding), # 2 * size + 2 * padding
+                max(0, int(y - size)):int(y + size + 2 * padding)            # 2 * size + 2 * padding
             ]
 
             cropped_frames.append(cv2.resize(face, (224,224)))
