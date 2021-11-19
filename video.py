@@ -126,19 +126,7 @@ def load_video(path):
 
 
 def load_frames(path):
-    cap = cv2.VideoCapture(path)
-    frame_num = 0
-    segment_num = 0
-
-    frames = []
-    while True:
-        ret, image = cap.read()
-        if ret == 0:
-            break
-
-        frames.append(image)
-
-    return frames
+    return Frames(path)
 
 
 def load_audio(path):
@@ -148,3 +136,44 @@ def load_audio(path):
     os.remove(path + ".wav")
 
     return sample_rate, audio
+
+
+class Frames:
+
+    def __init__(self, path):
+        self.path = path
+        self.frames = []
+        self.offset = 0
+
+    def __iter__(self):
+        cap = cv2.VideoCapture(self.path)
+        frame_num = 0
+        segment_num = 0
+
+        frames = []
+        while True:
+            ret, frame = cap.read()
+            if ret == 0:
+                break
+
+            self.frames.append(frame)
+            yield frame
+
+    def __getitem__(self, key):
+        if not isinstance(key, slice):
+            raise ValueError('Class Frames supports only slicing')
+
+        start = key.indices(len(self))[0]
+        end = key.indices(len(self))[1]
+
+        if start < self.offset or (end - start) > len(self.frames):
+            raise ValueError('Trying to slice invalid frame')
+
+        sliced_frames = self.frames[(start - self.offset):(end - self.offset)]
+        self.frames = self.frames[(end - self.offset):]
+        self.offset = end
+
+        return sliced_frames
+
+    def __len__(self):
+        return self.offset + len(self.frames)
