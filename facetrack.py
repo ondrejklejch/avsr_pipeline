@@ -22,7 +22,7 @@ def find_facetracks(face_detector, video, min_face_size=50, every_nth_frame=1):
         start_frame = face_track[0][0]
         end_frame = face_track[-1][0]
 
-        yield video.trim(start_frame, end_frame).crop(interpolate_track(face_track))
+        yield video.cut(start_frame, end_frame).crop(interpolate_track(face_track))
 
 
 def detect_faces_in_frames(face_detector, images, every_nth_frame=1, conf_th=0.9, scales=[0.25], batch_size=256):

@@ -16,7 +16,7 @@ class Video:
         self.frame_offset = frame_offset
         self.parent = parent
 
-    def trim(self, start_frame, end_frame, offset=0):
+    def cut(self, start_frame, end_frame, offset=0):
         if start_frame >= offset:
             return Video(
                 self.frames[start_frame:end_frame],
@@ -30,7 +30,28 @@ class Video:
                 self.frames[(start_frame + offset):(end_frame + offset)],
                 self.audio[start_frame * 640:end_frame * 640],
                 self.audio_sample_rate,
-                self.frame_offset + start_frame,
+                self.frame_offset + start_frame + offset,
+                self
+            )
+
+    def trim(self):
+        len_frames = len(self.frames)
+        len_audio = len(self.audio) // 640
+
+        if len_frames >= len_audio:
+            return Video(
+                self.frames[:len_audio],
+                self.audio,
+                self.audio_sample_rate,
+                self.frame_offset,
+                self
+            )
+        else:
+            return Video(
+                self.frames,
+                self.audio[:len_frames * 640],
+                self.audio_sample_rate,
+                self.frame_offset,
                 self
             )
 

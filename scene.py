@@ -8,11 +8,11 @@ def segment_scenes(segment, threshold, min_scene_length):
     for i, score in enumerate(scores):
         i += 1
         if score > threshold and (i - prev_split) > min_scene_length:
-            yield segment.trim(prev_split, i)
+            yield segment.cut(prev_split, i)
             prev_split = i
 
     if (i - prev_split) > min_scene_length:
-        yield segment.trim(prev_split, i)
+        yield segment.cut(prev_split, i)
 
 
 def compute_scores(segment):
