@@ -27,6 +27,10 @@ def main(device, scene_threshold, min_scene_duration, min_face_size, detect_face
         video = load_video(path)
         scenes = segment_scenes(video, scene_threshold, min_scene_duration)
         for scene in scenes:
+            scene = scene.trim()
+            if (len(scene.frames) == 0):
+               continue
+
             facetracks = find_facetracks(face_detector, scene, min_face_size, detect_face_every_nth_frame)
             for facetrack in facetracks:
                 segments = find_talking_segments(syncnet, facetrack, syncnet_threshold, min_speech_duration, max_pause_duration)
