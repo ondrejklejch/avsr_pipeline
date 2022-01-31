@@ -139,6 +139,9 @@ class Video:
         os.remove(tmp_wav)
         os.remove(tmp_avi)
 
+    def length(self):
+        return len(self.frames)
+
 
 def load_video(path):
     video = load_frames(path)

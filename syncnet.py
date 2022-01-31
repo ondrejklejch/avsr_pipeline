@@ -32,8 +32,9 @@ def find_talking_segments(syncnet, facetrack, threshold, min_speech_duration, ma
 
         for start, end in segments:
             confidence, offset = compute_confidence_and_offset(visual_feats[start:end], audio_feats[start:end], 5)
-            if confidence >= threshold:
-                yield facetrack.cut(start, end, offset=offset).trim()
+            segment = facetrack.cut(start, end, offset=offset).trim()
+            if confidence >= threshold and segment.length() >= min_speech_duration:
+                yield segment
 
 
 def get_syncnet_scores(syncnet, facetrack, vshift):
