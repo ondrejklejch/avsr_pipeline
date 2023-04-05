@@ -9,12 +9,15 @@ import subprocess
 
 class Video:
 
-    def __init__(self, frames, audio, audio_sample_rate, frame_offset = 0, parent=None):
+    def __init__(self, frames, audio, audio_sample_rate, frame_offset = 0, parent=None, xs=[], ys=[], sizes=[]):
         self.frames = frames
         self.audio = audio
         self.audio_sample_rate = audio_sample_rate
         self.frame_offset = frame_offset
         self.parent = parent
+        self.xs = xs
+        self.ys = ys
+        self.sizes = sizes
 
     def cut(self, start_frame, end_frame, offset=0):
         if start_frame >= offset:
@@ -23,7 +26,10 @@ class Video:
                 self.audio[(start_frame - offset) * 640:(end_frame - offset) * 640],
                 self.audio_sample_rate,
                 self.frame_offset + start_frame,
-                self
+                self,
+                self.xs[start_frame:end_frame],
+                self.ys[start_frame:end_frame],
+                self.sizes[start_frame:end_frame]
             )
         else:
             return Video(
@@ -31,7 +37,10 @@ class Video:
                 self.audio[start_frame * 640:end_frame * 640],
                 self.audio_sample_rate,
                 self.frame_offset + start_frame + offset,
-                self
+                self,
+                self.xs[start_frame + offset:end_frame + offset],
+                self.ys[start_frame + offset:end_frame + offset],
+                self.sizes[start_frame + offset:end_frame + offset]
             )
 
     def trim(self):
@@ -44,7 +53,10 @@ class Video:
                 self.audio,
                 self.audio_sample_rate,
                 self.frame_offset,
-                self
+                self,
+                self.xs[:len_audio],
+                self.ys[:len_audio],
+                self.sizes[:len_audio]
             )
         else:
             return Video(
@@ -52,7 +64,10 @@ class Video:
                 self.audio[:len_frames * 640],
                 self.audio_sample_rate,
                 self.frame_offset,
-                self
+                self,
+                self.xs[:len_frames],
+                self.ys[:len_frames],
+                self.sizes[:len_frames]
             )
 
     def crop(self, track, crop_padding_factor=0.4):
@@ -92,7 +107,10 @@ class Video:
             self.audio,
             self.audio_sample_rate,
             self.frame_offset,
-            self.parent
+            self.parent,
+            list(xs),
+            list(ys),
+            list(sizes)
         )
 
     def plot(self, title, rows=5, cols=4):
@@ -122,8 +140,9 @@ class Video:
         plt.show()
 
     def write(self, path, tmpdir='/tmp'):
-        tmp_wav = tmpdir + "/audio.wav"
-        tmp_avi = tmpdir + "/video_without_audio.avi"
+        print("Writing %s with %d frames and %d corresponding audio frames" % (path, len(self.frames), len(self.audio) // 640))
+        tmp_wav = path + ".audio.wav"
+        tmp_avi = path + ".video_without_audio.avi"
         wavfile.write(tmp_wav, self.audio_sample_rate, self.audio)
 
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -133,7 +152,7 @@ class Video:
             vOut.write(frame)
         vOut.release()
 
-        command = ("ffmpeg -v 8 -y -i %s -i %s -strict -2 %s" % (tmp_wav, tmp_avi, path))
+        command = ("ffmpeg -loglevel error -v 8 -y -i %s -i %s -strict -2 %s" % (tmp_wav, tmp_avi, path))
         output = subprocess.call(command, shell=True, stdout=None)
 
         os.remove(tmp_wav)
@@ -168,15 +187,19 @@ class Frames:
         self.path = path
         self.frames = []
         self.offset = 0
+        self.cap = cv2.VideoCapture(self.path)
+
+    def prefetch(self, end):
+        for _ in range(end - self.offset - len(self.frames)):
+            ret, frame = self.cap.read()
+            if ret == 0:
+                break
+
+            self.frames.append(frame)
 
     def __iter__(self):
-        cap = cv2.VideoCapture(self.path)
-        frame_num = 0
-        segment_num = 0
-
-        frames = []
         while True:
-            ret, frame = cap.read()
+            ret, frame = self.cap.read()
             if ret == 0:
                 break
 
@@ -191,11 +214,11 @@ class Frames:
         end = key.indices(len(self))[1]
 
         if start < self.offset or (end - start) > len(self.frames):
-            raise ValueError('Trying to slice invalid frame')
+            raise ValueError('Trying to slice invalid frame %d:%d when offset is %d and length is %d %s' % (start, end, self.offset, len(self.frames), self.path))
 
         sliced_frames = self.frames[(start - self.offset):(end - self.offset)]
-        self.frames = self.frames[(end - self.offset):]
-        self.offset = end
+        self.frames = self.frames[(end - self.offset - 1):]
+        self.offset = end - 1
 
         return sliced_frames
 

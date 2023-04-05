@@ -13,8 +13,8 @@ def load_face_detector(device):
     return S3FD(device)
 
 
-def find_facetracks(face_detector, video, min_face_size=50, every_nth_frame=1):
-    frame_bboxes = list(detect_faces_in_frames(face_detector, video.frames, every_nth_frame=every_nth_frame))
+def find_facetracks(face_detector, video, min_face_size=50, every_nth_frame=1, scales=[0.25]):
+    frame_bboxes = list(detect_faces_in_frames(face_detector, video.frames, every_nth_frame=every_nth_frame, scales=scales))
     for face_track in extract_face_tracks(frame_bboxes):
         if is_too_small(face_track, min_face_size):
             continue
@@ -25,7 +25,7 @@ def find_facetracks(face_detector, video, min_face_size=50, every_nth_frame=1):
         yield video.cut(start_frame, end_frame).crop(interpolate_track(face_track))
 
 
-def detect_faces_in_frames(face_detector, images, every_nth_frame=1, conf_th=0.9, scales=[0.25], batch_size=256):
+def detect_faces_in_frames(face_detector, images, every_nth_frame=1, conf_th=0.9, scales=[0.25], batch_size=64):
     images = images[::every_nth_frame]
 
     with torch.no_grad():
@@ -64,6 +64,9 @@ def detect_faces_in_frames(face_detector, images, every_nth_frame=1, conf_th=0.9
 def preprocess_image(image, scale):
     mean = np.array([123., 117., 104.])[:, np.newaxis, np.newaxis].astype('float32')
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    # We want fixed scale
+    scale = 288. / image.shape[0]
     image = cv2.resize(image, dsize=(0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
     return np.transpose(image, [2, 0, 1]).astype('float32') - mean
 
@@ -80,7 +83,7 @@ def bb_intersection_over_union(bboxA, bboxB):
     return iou
 
 def extract_face_tracks(frame_bboxes):
-    iouThres = 0.75    # Minimum IOU between consecutive face detections
+    iouThres = 0.5    # Minimum IOU between consecutive face detections
     num_failed_det = 25
     min_track = 25
 
